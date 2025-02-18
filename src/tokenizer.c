@@ -9,16 +9,6 @@
 /*****************************************************************************/
 /* PRIVATE VARIABLES */
 /*****************************************************************************/
-static const char symbols[] = {
-    '{', '}', '(', ')', '[', ']', '.', ',', ';',
-    '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'
-};
-
-static const char* keywords[] = {
-    "class", "constructor", "function", "method", "field", "static",
-    "var", "int", "char", "boolean", "void", "true", "false", "null",
-    "this", "let", "do", "if", "else", "while", "return"
-};
 
 /*****************************************************************************/
 /* PRIVATE FUNCTIONS */
@@ -67,7 +57,7 @@ bool is_whitespace(char c)
 
 bool is_comment_start(Tokenizer* t)
 {
-    if ((t->cursor + 1) < t->contentLen) {
+    if ((t->cursor + 1) >= t->contentLen) {
         return false;
     }
     
@@ -136,6 +126,7 @@ int tknzr_new(Tokenizer* t, const char* path)
     t->content = buffer;
     t->contentLen = fileSize;
     t->cursor = 0;
+    t->prevTokStart = 0;
     t->tokStart = 0;
     t->tokEnd = 0;
     t->tokType = TOK_TYPE_INVALID;
@@ -167,6 +158,7 @@ void tknzr_advance(Tokenizer *t)
 {
     // Reset keyword type
     t->tokKeyword = KW_INVALID;
+    t->prevTokStart = t->tokStart;
 
     if (t->content[t->cursor] == '"') {
         // String literal

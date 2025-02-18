@@ -6,6 +6,19 @@
 #include <stdbool.h>
 #include <errno.h>
 
+#define MAX_IDENTIFIER_STR_LEN    60
+
+static const char symbols[] = {
+    '{', '}', '(', ')', '[', ']', '.', ',', ';',
+    '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'
+};
+
+static const char* keywords[] = {
+    "class", "constructor", "function", "method", "field", "static",
+    "var", "int", "char", "boolean", "void", "true", "false", "null",
+    "this", "let", "do", "if", "else", "while", "return"
+};
+
 typedef enum TokenType {
     TOK_TYPE_KEYWORD,
     TOK_TYPE_SYMBOL,
@@ -49,6 +62,7 @@ typedef struct Tokenizer {
     uint64_t contentLen;
     uint64_t cursor;
 
+    uint64_t prevTokStart;
     uint64_t tokStart;
     uint64_t tokEnd;
     TokenType tokType;

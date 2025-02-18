@@ -1,13 +1,4 @@
 // This is an example jack file
 
 class Main {
-    function void main() {
-        var x;
-        var y;
-
-        let x = (x + 1)/y;
-        do call_function_2(x);
-
-        return;
-    }
 }
