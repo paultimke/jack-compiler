@@ -202,10 +202,28 @@ int compEng_compileClass(compEng *eng)
 
 int compEng_compileClassVarDec(compEng* eng)
 {
+    // Rule:
+    // ('static'|'field') type varName (','varName)* ';'
     return 0;
 }
 
 int compEng_compileSubroutineDec(compEng* eng)
 {
+    // Rule:
+    // ('constructor'|'function'|'method')('void'|type)subroutineName
+    // '(' parameterList ')' subroutineBody
+
     return 0;
 }
+
+// type rule:
+// 'int'|'char'|'boolean'|className
+//
+// parameterList rule:
+// ((type varName) (',' type varName)*)?
+//
+// subroutineBody rule:
+// '{' varDec* statements '}'
+//
+// varDec rule:
+// 'var' type varName (',' varName)* ';'
