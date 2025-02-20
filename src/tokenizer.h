@@ -6,7 +6,9 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#define MAX_IDENTIFIER_STR_LEN    60
+#define MAX_IDENTIFIER_STR_LEN     60
+#define MAX_KEYWORD_STR_LEN        (sizeof("constructor")/sizeof(char))
+#define TOKEN_CURSOR_INVALID_VALUE 0xFFFF
 
 static const char symbols[] = {
     '{', '}', '(', ')', '[', ']', '.', ',', ';',
@@ -57,16 +59,19 @@ typedef enum Keyword {
     KW_INVALID = KW_COUNT
 } Keyword;
 
+typedef struct Token {
+    uint64_t start;
+    uint64_t end;
+    TokenType type;
+    Keyword keyword;
+} Token;
+
 typedef struct Tokenizer {
     const char* content;
     uint64_t contentLen;
     uint64_t cursor;
-
-    uint64_t prevTokStart;
-    uint64_t tokStart;
-    uint64_t tokEnd;
-    TokenType tokType;
-    Keyword tokKeyword;
+    Token currTok;
+    Token prevTok;
 } Tokenizer;
 
 int tknzr_new(Tokenizer *t, const char* path);
@@ -79,4 +84,4 @@ void tknzr_advance(Tokenizer *t);
 
 void tknzr_get_string_val(Tokenizer *t, char* dst, uint16_t dstSize);
 
-#endif /* TOKENIZER_H */
+#endif // TOKENIZER_H

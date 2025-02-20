@@ -21,4 +21,6 @@ int compEng_compileClassVarDec(compEng* eng);
 
 int compEng_compileSubroutineDec(compEng* eng);
 
+int compEng_compileType(compEng* eng);
+
 #endif // COMPILER_ENGINE_H

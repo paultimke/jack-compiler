@@ -43,9 +43,9 @@ int main(int argc, char **argv)
     while (tknzr_has_more_tokens(&tokenizer)) {
         tknzr_advance(&tokenizer);
 
-        switch(tokenizer.tokType) {
+        switch(tokenizer.currTok.type) {
             case TOK_TYPE_KEYWORD:
-                processKeyword(&tokenizer, &compEng);
+                ret = processKeyword(&tokenizer, &compEng);
                 break;
             case TOK_TYPE_SYMBOL:
                 break;
@@ -55,6 +55,15 @@ int main(int argc, char **argv)
                 break;
             case TOK_TYPE_STRING_CONST:
                 break;
+            default:
+                break;
+        }
+    }
+
+    if (ret < 0) {
+        switch (ret) {
+            case -EINVAL:
+                LOG_ERR("Parse Error: Did not get expected token");
             default:
                 break;
         }
@@ -73,7 +82,7 @@ int processKeyword(Tokenizer* t, compEng* eng)
 {
     int ret;
 
-    switch (t->tokKeyword) {
+    switch (t->currTok.keyword) {
         case KW_CLASS:
             ret = compEng_compileClass(eng);
             break;

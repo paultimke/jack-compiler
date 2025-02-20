@@ -9,6 +9,12 @@
 /*****************************************************************************/
 /* PRIVATE VARIABLES */
 /*****************************************************************************/
+static Token defaultToken = {
+    .start = TOKEN_CURSOR_INVALID_VALUE,
+    .end = TOKEN_CURSOR_INVALID_VALUE,
+    .type = TOK_TYPE_INVALID,
+    .keyword = KW_INVALID,
+};
 
 /*****************************************************************************/
 /* PRIVATE FUNCTIONS */
@@ -38,16 +44,6 @@ bool is_symbol(char c)
     }
 
     return false;
-}
-
-Keyword get_keyword_type(const char* s, uint8_t s_len)
-{
-    for (uint8_t i = 0; i < NUMBER_OF_KEYWORDS; i++) {
-        if (strncmp(s, keywords[i], s_len) == 0) {
-            return (Keyword)i;
-        }
-    }
-    return KW_INVALID;
 }
 
 bool is_whitespace(char c)
@@ -89,6 +85,16 @@ void remove_whitespace_and_comments(Tokenizer* t)
     }
 }
 
+Keyword get_keyword_type(const char* s, uint8_t s_len)
+{
+    for (uint8_t i = 0; i < NUMBER_OF_KEYWORDS; i++) {
+        if (strncmp(s, keywords[i], s_len) == 0) {
+            return (Keyword)i;
+        }
+    }
+    return KW_INVALID;
+}
+
 /*****************************************************************************/
 /* PUBLIC FUNCTIONS */
 /*****************************************************************************/
@@ -126,10 +132,8 @@ int tknzr_new(Tokenizer* t, const char* path)
     t->content = buffer;
     t->contentLen = fileSize;
     t->cursor = 0;
-    t->prevTokStart = 0;
-    t->tokStart = 0;
-    t->tokEnd = 0;
-    t->tokType = TOK_TYPE_INVALID;
+    t->currTok = defaultToken;
+    t->prevTok = defaultToken;
 
     // Remove the first encountered whitespace and comments. This has to be done
     // once at start and will be continued to be done at the end of each token
@@ -156,45 +160,47 @@ bool tknzr_has_more_tokens(Tokenizer *t)
 
 void tknzr_advance(Tokenizer *t)
 {
+    // Copy currTok to be the previous before advancing
+    t->prevTok = t->currTok;
+
     // Reset keyword type
-    t->tokKeyword = KW_INVALID;
-    t->prevTokStart = t->tokStart;
+    t->currTok.keyword = KW_INVALID;
 
     if (t->content[t->cursor] == '"') {
         // String literal
-        t->tokType = TOK_TYPE_STRING_CONST;
+        t->currTok.type = TOK_TYPE_STRING_CONST;
         t->cursor++;
-        t->tokStart = t->cursor;
+        t->currTok.start = t->cursor;
 
         while (!is_EOF(t) && t->content[t->cursor] != '"') {
             t->cursor++;
         }
 
-        t->tokEnd = t->cursor;
+        t->currTok.end = t->cursor;
         t->cursor++; // Advance one more to get rid of closing '""
     } 
     else if (is_digit(t->content[t->cursor])) {
         // integer constant
-        t->tokType = TOK_TYPE_INT_CONST;
-        t->tokStart = t->cursor;
+        t->currTok.type = TOK_TYPE_INT_CONST;
+        t->currTok.start = t->cursor;
 
         while (!is_EOF(t) && is_digit(t->content[t->cursor])) {
             t->cursor++;
         }
 
-        t->tokEnd = t->cursor;
+        t->currTok.end = t->cursor;
     } 
     else if (is_symbol(t->content[t->cursor])) {
         // Symbol (nothing else to do, since symbols are one character)
-        t->tokType = TOK_TYPE_SYMBOL;
-        t->tokStart = t->cursor;
+        t->currTok.type = TOK_TYPE_SYMBOL;
+        t->currTok.start = t->cursor;
         t->cursor++;
-        t->tokEnd = t->cursor;
+        t->currTok.end = t->cursor;
     }
     else if (is_letter(t->content[t->cursor]) || t->content[t->cursor] == '_') {
         // Could be either identifier or keyword. We need to get the complete
         // token and decide its type at the end
-        t->tokStart = t->cursor;
+        t->currTok.start = t->cursor;
 
         while (is_letter(t->content[t->cursor])
                 || is_digit(t->content[t->cursor])
@@ -204,16 +210,16 @@ void tknzr_advance(Tokenizer *t)
         }
 
         // Now that we have the token, check if it's keyword or identifier
-        Keyword kw = get_keyword_type(&t->content[t->tokStart], t->cursor - t->tokStart);
+        Keyword kw = get_keyword_type(&t->content[t->currTok.start], t->cursor - t->currTok.start);
         if (kw != KW_INVALID) {
-            t->tokType = TOK_TYPE_KEYWORD;
-            t->tokKeyword = kw;
+            t->currTok.type = TOK_TYPE_KEYWORD;
+            t->currTok.keyword = kw;
         }
         else {
-            t->tokType = TOK_TYPE_IDENTIFIER;
+            t->currTok.type = TOK_TYPE_IDENTIFIER;
         }
 
-        t->tokEnd = t->cursor;
+        t->currTok.end = t->cursor;
     }
     
     // Remove all whitespace and comments between the end of this token
@@ -223,13 +229,13 @@ void tknzr_advance(Tokenizer *t)
 
 void tknzr_get_string_val(Tokenizer *t, char* dst, uint16_t dstSize)
 {
-    uint16_t strLen = t->tokEnd - t->tokStart;
+    uint16_t strLen = t->currTok.end - t->currTok.start;
 
     if (dstSize < (strLen + 1)) {
         return;
     }
 
     // Copy to the buffer and add null terminator
-    strncpy(dst, &t->content[t->tokStart], strLen);
+    strncpy(dst, &t->content[t->currTok.start], strLen);
     dst[strLen] = '\0';
 }
