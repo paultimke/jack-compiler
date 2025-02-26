@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include "compiler_engine.h"
 #include "tokenizer.h"
@@ -38,7 +39,7 @@ int consume_identifier(compEng *eng)
                                  // need to check for a verbatim match against
                                  // a known string
 
-    return consume_token_helper(eng, condition, TOK_TYPE_KEYWORD);
+    return consume_token_helper(eng, condition, TOK_TYPE_IDENTIFIER);
 }
 
 int consume_symbol(compEng *eng, char sym)
@@ -76,6 +77,21 @@ Keyword consume_keyword_if_found(compEng *eng, Keyword *arr, uint8_t arrSize)
     return KW_INVALID;
 }
 
+bool is_statement_keyword(Keyword kw)
+{
+    const Keyword statementKeywords[] = {
+        KW_LET, KW_DO, KW_IF, KW_WHILE, KW_RETURN
+    };
+
+    for (uint8_t i = 0; i < ARR_SIZE(statementKeywords); i++) {
+        if (kw == statementKeywords[i]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /*****************************************************************************/
 /* PUBLIC FUNCTIONS */
 /*****************************************************************************/
@@ -102,45 +118,27 @@ int compEng_compileClass(compEng *eng)
     write_output(eng, "<class>\n");
 
     // Compile according to rule ..........................
-    ret = consume_keyword(eng, KW_CLASS);
-    if (ret < 0) {
-        return ret;
-    }
+    EXIT_ON_ERR(consume_keyword(eng, KW_CLASS));
     write_keyword(eng, KW_CLASS);
     
-    ret = consume_identifier(eng);
-    if (ret < 0) {
-        return ret;
-    }
+    EXIT_ON_ERR(consume_identifier(eng));
     write_identifier(eng, &eng->tknzr->prevTok);
 
-    ret = consume_symbol(eng, '{');
-    if (ret < 0) {
-        return ret;
-    }
+    EXIT_ON_ERR(consume_symbol(eng, '{'));
     write_symbol(eng, '{');
 
     while (t->currTok.keyword == KW_STATIC || t->currTok.keyword == KW_FIELD) {
-        ret = compEng_compileClassVarDec(eng);
-        if (ret < 0) {
-            return ret;
-        }
+        EXIT_ON_ERR(compEng_compileClassVarDec(eng));
     }
 
     while (t->currTok.keyword == KW_FUNCTION
             || t->currTok.keyword == KW_METHOD
             || t->currTok.keyword == KW_CONSTRUCTOR)
     {
-        ret = compEng_compileSubroutineDec(eng);
-        if (ret < 0) {
-            return ret;
-        }
+        EXIT_ON_ERR(compEng_compileSubroutineDec(eng));
     }
 
-    ret = consume_symbol(eng, '}');
-    if (ret < 0) {
-        return ret;
-    }
+    EXIT_ON_ERR(consume_symbol(eng, '}'));
     write_symbol(eng, '}');
 
     // Close tag ..........................................
@@ -155,7 +153,7 @@ int compEng_compileClass(compEng *eng)
 int compEng_compileClassVarDec(compEng* eng)
 {
     int        ret;
-    Tokenizer *t = eng->tknzr;
+    Tokenizer* t = eng->tknzr;
     Keyword    found_Kw;
     Keyword    kw_options[] = {KW_STATIC, KW_FIELD};
 
@@ -170,16 +168,7 @@ int compEng_compileClassVarDec(compEng* eng)
     }
     write_keyword(eng, found_Kw);
 
-    ret = compEng_compileType(eng);
-    if (ret < 0) {
-        return ret;
-    }
-
-    ret = consume_identifier(eng);
-    if (ret < 0) {
-        return ret;
-    }
-    write_identifier(eng, &t->prevTok);
+    EXIT_ON_ERR(compEng_compileTypeVarName(eng));
 
     while (true) {
         ret = consume_symbol(eng, ';');
@@ -189,16 +178,10 @@ int compEng_compileClassVarDec(compEng* eng)
             break;
         }
 
-        ret = consume_symbol(eng, ',');
-        if (ret < 0) {
-            return ret;
-        }
+        EXIT_ON_ERR(consume_symbol(eng, ','));
         write_symbol(eng, ',');
 
-        ret = consume_identifier(eng);
-        if (ret < 0) {
-            return ret;
-        }
+        EXIT_ON_ERR(consume_identifier(eng));
         write_identifier(eng, &t->prevTok);
     }
 
@@ -214,6 +197,46 @@ int compEng_compileClassVarDec(compEng* eng)
 // '(' parameterList ')' subroutineBody
 int compEng_compileSubroutineDec(compEng* eng)
 {
+    int        ret;
+    Tokenizer* t = eng->tknzr;
+    Keyword    found_Kw;
+    Keyword    kw_options[] = {KW_METHOD, KW_FUNCTION, KW_CONSTRUCTOR};
+
+    // Open tag ...........................................
+    eng->recurseLevel++;
+    write_output(eng, "<subroutineDec>\n");
+
+    // Compile according to rule ..........................
+    found_Kw = consume_keyword_if_found(eng, kw_options, ARR_SIZE(kw_options));
+    if (found_Kw == KW_INVALID) {
+        return -EINVAL;
+    }
+    write_keyword(eng, found_Kw);
+
+    if (t->currTok.keyword == KW_VOID) {
+        EXIT_ON_ERR(consume_keyword(eng, KW_VOID));
+        write_keyword(eng, KW_VOID);
+    }
+    else {
+        EXIT_ON_ERR(compEng_compileType(eng));
+    }
+
+    EXIT_ON_ERR(consume_identifier(eng));
+    write_identifier(eng, &t->prevTok);
+
+    EXIT_ON_ERR(consume_symbol(eng, '('));
+    write_symbol(eng, '(');
+
+    EXIT_ON_ERR(compEng_compileParameterList(eng));
+
+    EXIT_ON_ERR(consume_symbol(eng, ')'));
+    write_symbol(eng, ')');
+
+    EXIT_ON_ERR(compEng_compileSubroutineBody(eng));
+
+    // Close tag ..........................................
+    write_output(eng, "</subroutineDec>\n");
+    eng->recurseLevel--;
 
     return 0;
 }
@@ -233,20 +256,365 @@ int compEng_compileType(compEng* eng)
         return 0;
     }
 
-    ret = consume_identifier(eng);
-    if (ret < 0) {
-        return ret;
-    }
+    EXIT_ON_ERR(consume_identifier(eng));
     write_identifier(eng, &t->prevTok);
 
     return 0;
 }
 
-// parameterList rule:
+// Rule:
 // ((type varName) (',' type varName)*)?
-//
-// subroutineBody rule:
+int compEng_compileParameterList(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    // Open tag ...........................................
+    eng->recurseLevel++;
+    write_output(eng, "<parameterList>\n");
+
+    // Compile according to rule ..........................
+    EXIT_ON_ERR(compEng_compileTypeVarName(eng));
+
+    while (t->content[t->currTok.start] == ',') {
+        EXIT_ON_ERR(consume_symbol(eng, ','));
+        write_symbol(eng, ',');
+
+        EXIT_ON_ERR(compEng_compileTypeVarName(eng));
+    }
+
+    // Close tag ..........................................
+    write_output(eng, "</parameterList>\n");
+    eng->recurseLevel--;
+
+    return 0;
+}
+
+// Rule:
 // '{' varDec* statements '}'
-//
-// varDec rule:
+// Note: statements = statement*
+int compEng_compileSubroutineBody(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    // Open tag ...........................................
+    eng->recurseLevel++;
+    write_output(eng, "<subroutineBody>\n");
+
+    // Compile according to rule ..........................
+    EXIT_ON_ERR(consume_symbol(eng, '{'));
+    write_symbol(eng, '{');
+
+    while (t->currTok.keyword == KW_VAR) {
+        EXIT_ON_ERR(compEng_compileVarDec(eng));
+    }
+
+    while (is_statement_keyword(t->currTok.keyword)) {
+        EXIT_ON_ERR(compEng_compileStatement(eng));
+    }
+
+    EXIT_ON_ERR(consume_symbol(eng, '}'));
+    write_symbol(eng, '}');
+
+    // Close tag ..........................................
+    write_output(eng, "</subroutineBody>\n");
+    eng->recurseLevel--;
+
+    return 0;
+}
+
+// Rule:
 // 'var' type varName (',' varName)* ';'
+int compEng_compileVarDec(compEng* eng)
+{
+    return 0;
+}
+
+// Helper to compile frequently appearing rule:
+// type varName
+int compEng_compileTypeVarName(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(compEng_compileType(eng));
+
+    EXIT_ON_ERR(consume_identifier(eng));
+    write_identifier(eng, &t->prevTok);
+
+    return 0;
+}
+
+// ********************************************************
+// Statements
+// ********************************************************
+
+// Rule:
+// letStatement | doStatement | ifStatement | whileStatement | returnStatement
+int compEng_compileStatement(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    // Open tag ...........................................
+    eng->recurseLevel++;
+    write_output(eng, "<statement>\n");
+
+    // Compile according to rule ..........................
+    switch (t->currTok.keyword) {
+        case KW_LET:
+            EXIT_ON_ERR(compEng_compileLetStatement(eng));
+            break;
+        case KW_DO:
+            EXIT_ON_ERR(compEng_compileDoStatement(eng));
+            break;
+        case KW_IF:
+            EXIT_ON_ERR(compEng_compileIfStatement(eng));
+            break;
+        case KW_WHILE:
+            EXIT_ON_ERR(compEng_compileWhileStatement(eng));
+            break;
+        case KW_RETURN:
+            EXIT_ON_ERR(compEng_compileReturnStatement(eng));
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    // Close tag ..........................................
+    write_output(eng, "</statement>\n");
+    eng->recurseLevel--;
+
+    return 0;
+}
+
+// Rule:
+// 'let' varName ('[' expression ']')? '=' expression ';'
+int compEng_compileLetStatement(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(consume_keyword(eng, KW_LET));
+    write_keyword(eng, KW_LET);
+
+    EXIT_ON_ERR(consume_identifier(eng));
+    write_identifier(eng, &t->prevTok);
+
+    if (t->content[t->currTok.start] == '[') {
+        EXIT_ON_ERR(consume_symbol(eng, '['));
+        write_symbol(eng, '[');
+
+        EXIT_ON_ERR(compEng_compileExpression(eng));
+
+        EXIT_ON_ERR(consume_symbol(eng, ']'));
+        write_symbol(eng, ']');
+    }
+
+    EXIT_ON_ERR(consume_symbol(eng, '='));
+    write_symbol(eng, '=');
+
+    EXIT_ON_ERR(compEng_compileExpression(eng));
+
+    EXIT_ON_ERR(consume_symbol(eng, ';'));
+    write_symbol(eng, ';');
+
+    return 0;
+}
+
+// Rule:
+// 'do' subroutineCall ';'
+int compEng_compileDoStatement(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(consume_keyword(eng, KW_DO));
+    write_keyword(eng, KW_DO);
+
+    EXIT_ON_ERR(compEng_compileSubroutineCall(eng));
+
+    EXIT_ON_ERR(consume_symbol(eng, ';'));
+    write_symbol(eng, ';');
+
+    return 0;
+}
+
+// Rule:
+// 'if' '(' expression ')' '{' statements '}'
+// ('else' '{' statements '}')?
+int compEng_compileIfStatement(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(consume_keyword(eng, KW_IF));
+    write_keyword(eng, KW_IF);
+
+    EXIT_ON_ERR(consume_symbol(eng, '('));
+    write_symbol(eng, '(');
+
+    EXIT_ON_ERR(compEng_compileExpression(eng));
+
+    EXIT_ON_ERR(consume_symbol(eng, ')'));
+    write_symbol(eng, ')');
+
+    EXIT_ON_ERR(consume_symbol(eng, '{'));
+    write_symbol(eng, '{');
+
+    while (is_statement_keyword(t->currTok.keyword)) {
+        EXIT_ON_ERR(compEng_compileStatement(eng));
+    }
+
+    EXIT_ON_ERR(consume_symbol(eng, '}'));
+    write_symbol(eng, '}');
+
+    if (t->currTok.keyword == KW_ELSE) {
+        EXIT_ON_ERR(consume_symbol(eng, '{'));
+        write_symbol(eng, '{');
+
+        while (is_statement_keyword(t->currTok.keyword)) {
+            EXIT_ON_ERR(compEng_compileStatement(eng));
+        }
+
+        EXIT_ON_ERR(consume_symbol(eng, '}'));
+        write_symbol(eng, '}');
+    }
+
+    return 0;
+}
+
+// Rule:
+// 'while' '(' expression ')' '{' statements '}'
+int compEng_compileWhileStatement(compEng *eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(consume_keyword(eng, KW_WHILE));
+    write_keyword(eng, KW_WHILE);
+
+    EXIT_ON_ERR(consume_symbol(eng, '('));
+    write_symbol(eng, '(');
+
+    EXIT_ON_ERR(compEng_compileExpression(eng));
+
+    EXIT_ON_ERR(consume_symbol(eng, ')'));
+    write_symbol(eng, ')');
+
+    EXIT_ON_ERR(consume_symbol(eng, '{'));
+    write_symbol(eng, '{');
+
+    while (is_statement_keyword(t->currTok.keyword)) {
+        EXIT_ON_ERR(compEng_compileStatement(eng));
+    }
+
+    EXIT_ON_ERR(consume_symbol(eng, '}'));
+    write_symbol(eng, '}');
+
+    return 0;
+}
+
+// Rule:
+// 'return' expression? ';'
+int compEng_compileReturnStatement(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(consume_keyword(eng, KW_RETURN));
+    write_keyword(eng, KW_RETURN);
+
+    // We must either get ';' or a valid expression
+    if (!(t->content[t->currTok.start] == ';')) {
+        EXIT_ON_ERR(compEng_compileExpression(eng));
+    }
+
+    EXIT_ON_ERR(consume_symbol(eng, ';'));
+    write_symbol(eng, ';');
+
+    return 0;
+}
+
+// ********************************************************
+// Expressions
+// ********************************************************
+
+int compEng_compileExpression(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    EXIT_ON_ERR(consume_identifier(eng));
+    write_identifier(eng, &t->prevTok);
+
+    return 0;
+}
+
+// Rule:
+// integerConstant | stringConstant | keywordConstant | varName |
+// varName '[' expression ']' | subroutineCall | '(' expression ')' |
+// unaryOp term
+int compEng_compileTerm(compEng* eng)
+{
+    return 0;
+}
+
+// Rule:
+// subroutineName '(' expressionList ')' |
+// (className | varName) '.' subroutineName '(' expressionList ')'
+int compEng_compileSubroutineCall(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    // Open tag ...........................................
+    eng->recurseLevel++;
+    write_output(eng, "<subroutineCall>\n");
+
+    // Compile according to rule ..........................
+
+    EXIT_ON_ERR(consume_identifier(eng));
+    write_identifier(eng, &t->prevTok);
+
+    if (t->content[t->currTok.start] == '.') {
+        EXIT_ON_ERR(consume_symbol(eng, '.'));
+        write_symbol(eng, '.');
+
+        EXIT_ON_ERR(consume_identifier(eng));
+        write_identifier(eng, &t->prevTok);
+    }
+
+    EXIT_ON_ERR(consume_symbol(eng, '('));
+    write_symbol(eng, '(');
+
+    EXIT_ON_ERR(compEng_compileExpressionList(eng));
+
+    EXIT_ON_ERR(consume_symbol(eng, ')'));
+    write_symbol(eng, ')');
+
+    // Close tag ...........................................
+    write_output(eng, "</subroutineCall>\n");
+    eng->recurseLevel--;
+
+    return 0;
+}
+
+int compEng_compileExpressionList(compEng* eng)
+{
+    int ret;
+    Tokenizer* t = eng->tknzr;
+
+    // Open tag ...........................................
+    eng->recurseLevel++;
+    write_output(eng, "<expressionList>\n");
+
+    // Compile according to rule ..........................
+
+    // Close tag ..........................................
+    write_output(eng, "<expressionList>\n");
+    eng->recurseLevel--;
+
+    return 0;
+}

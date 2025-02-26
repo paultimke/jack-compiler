@@ -27,10 +27,12 @@ int write_identifier(compEng* eng, Token* tok)
     Tokenizer *t = eng->tknzr;
     eng->recurseLevel++;
 
-    write_output(eng, "<identifier>\n\t");
-    write_output_n(eng, &t->content[tok->start], tok->end - tok->start);
-    write_output(eng, "\n");
-    write_output(eng, "</identifier>\n");
+    char identifier[MAX_IDENTIFIER_STR_LEN + 1];
+    char tmpBuf[60];
+
+    snprintf(identifier, (tok->end - tok->start) + 1, "%s", &t->content[tok->start]);
+    snprintf(tmpBuf, sizeof(tmpBuf), "<identifier> %s </identifier>\n", identifier);
+    write_output(eng, tmpBuf);
 
     eng->recurseLevel--;
     return 0;

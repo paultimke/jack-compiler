@@ -1,4 +1,19 @@
 // This is an example jack file
 
 class Main {
+    static int x, y, z;
+    field char c;
+
+    method void init(char arr, int size) {
+        let x[y] = z;
+        let z = z;
+
+        while (x) {
+            if (y) {
+                do init(y, z);
+            }
+        }
+
+        return;
+    }
 }

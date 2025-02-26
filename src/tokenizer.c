@@ -88,7 +88,7 @@ void remove_whitespace_and_comments(Tokenizer* t)
 Keyword get_keyword_type(const char* s, uint8_t s_len)
 {
     for (uint8_t i = 0; i < NUMBER_OF_KEYWORDS; i++) {
-        if (strncmp(s, keywords[i], s_len) == 0) {
+        if (s_len == strlen(keywords[i]) && strncmp(s, keywords[i], s_len) == 0) {
             return (Keyword)i;
         }
     }

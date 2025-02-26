@@ -24,7 +24,7 @@ int main(int argc, char **argv)
     char tokStr[100];
     const char* inputPath;
 
-    if (argc != 1) {
+    if (argc != 2) {
         LOG_ERR("Please provide input file or directory\n");
     }
 
